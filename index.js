@@ -92,6 +92,19 @@ app.post("/api/shorturl", function (req, res) {
     console.log(err);
     res.json({ error: 'invalid url' });
   }
+});
+
+app.get("/api/shorturl/:short_url", async function (req, res) {
+  const id = req.params.short_url;
+  const exists = await UrlShortener.findOne({short_url : id});
+  console.log(exists);
+  if (exists) {
+    res.redirect(exists.original_url);
+  } else {
+    res.json({ error: 'invalid url' });
+  }
+  
+
 })
 
 app.listen(port, function() {
