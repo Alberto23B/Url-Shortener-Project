@@ -2,7 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require("mongoose");
-const dns = require("dns")
+const { URL } = require("url");
+const dns = require("dns");
 const app = express();
 
 mongoose.connect(
@@ -11,17 +12,15 @@ mongoose.connect(
 );
 
 const urlShortenerSchema = new mongoose.Schema({
-  originalUrl : String,
-  shortUrl : Number
+  original_url : String,
+  short_url : Number
 })
 
 let UrlShortener = mongoose.model("urlShortener", urlShortenerSchema);
 
-let count;
-
 const getCount = async () => {
   try {
-    count = UrlShortener.countDocuments();
+    const count = await UrlShortener.countDocuments();
     return count
   } catch (err) {
     console.error(err);
@@ -30,14 +29,14 @@ const getCount = async () => {
 }
 
 const urlEnrty = async (url) => {
-  await getCount();
-  count++;
+  let count = await getCount() + 1;
   const document = new UrlShortener({
-    originalUrl: url,
-    shortUrl: count
+    original_url: url,
+    short_url: count
   });
   try {
     const result = await document.save();
+    count++;
     return result;
   } catch (err) {
     console.error(err);
@@ -68,25 +67,31 @@ app.get('/api/hello', function(req, res) {
 
 app.post("/api/shorturl", function (req, res) {
   const origUrl = req.body.url
-  const url = origUrl.replace(/https:\/\//g,'');
-  dns.lookup(url, async function (err, data) {
-    if (err) {
-      console.log(err);
-      res.json({ error : 'invalid url' })
-      return
-    } else {
-      const exists = await UrlShortener.findOne({ originalUrl: origUrl});
-      console.log(exists);
-      if (exists) {
-        res.json({ originalUrl: origUrl, shortUrl: exists.shortUrl })
+  try {
+    const parsedUrl = new URL(origUrl);
+    const hostname = parsedUrl.hostname;
+    dns.lookup(hostname, async function (err, data) {
+      if (err) {
+        console.log(err);
+        res.json({ error : 'invalid url' })
+        return
       } else {
-        urlEnrty(origUrl);
-        const newUrlEntry = await UrlShortener.findOne({ originalUrl: origUrl});
-        console.log(newUrlEntry);
-        res.json({ originalUrl: origUrl, shortUrl: newUrlEntry.shortUrl });
-      } 
-    }
-  })
+        const exists = await UrlShortener.findOne({ original_url: origUrl});
+        console.log(exists);
+        if (exists) {
+          res.json({ original_url: origUrl, short_url: exists.short_url })
+        } else {
+          await urlEnrty(origUrl);
+          const newUrlEntry = await UrlShortener.findOne({ original_url: origUrl});
+          console.log(newUrlEntry);
+          res.json({ original_url: origUrl, short_url: newUrlEntry.short_url });
+        } 
+      }
+    });
+  } catch (err) {
+    console.log(err);
+    res.json({ error: 'invalid url' });
+  }
 })
 
 app.listen(port, function() {
